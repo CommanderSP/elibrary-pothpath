@@ -81,9 +81,8 @@ export default function AdminPage() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-2 rounded-md capitalize ${
-                tab === t ? "bg-indigo-600 text-white" : "bg-white border hover:bg-gray-50"
-              }`}
+              className={`px-4 py-2 rounded-md capitalize ${tab === t ? "bg-indigo-600 text-white" : "bg-white border hover:bg-gray-50"
+                }`}
             >
               {t}
             </button>
@@ -138,7 +137,7 @@ function BooksTab() {
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState<"pending" | "approved" | "rejected" | "all">("pending")
   const [sort, setSort] = useState<"newest" | "oldest" | "az">("newest")
-
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [genres, setGenres] = useState<Genre[]>([])
   const [edit, setEdit] = useState<Book | null>(null)
 
@@ -171,7 +170,11 @@ function BooksTab() {
 
       const { data, error } = await q
       if (error) throw error
-      setBooks((data || []) as Book[])
+      const transformedData = (data || []).map(book => ({
+        ...book,
+        genres: Array.isArray(book.genres) ? book.genres[0] : book.genres
+      }))
+      setBooks(transformedData as Book[])
     } catch (e) {
       console.error(e)
       setBooks([])
@@ -210,7 +213,7 @@ function BooksTab() {
           <FunnelIcon className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value as any)}
+            onChange={(e) => setStatus(e.target.value as "pending" | "approved" | "rejected" | "all")}
             className="w-full pl-10 pr-3 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
           >
             <option value="pending">Pending</option>
@@ -222,7 +225,7 @@ function BooksTab() {
         <div>
           <select
             value={sort}
-            onChange={(e) => setSort(e.target.value as any)}
+            onChange={(e) => setSort(e.target.value as "newest" | "oldest" | "az")}
             className="w-full px-3 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
           >
             <option value="newest">Newest first</option>
@@ -552,12 +555,16 @@ function AnalyticsTab() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    ;(async () => {
+    ; (async () => {
       setLoading(true)
       const { data: b } = await supabase
         .from("books")
         .select("id, status, genre_id, genres(name)")
-      setBooks((b || []) as Book[])
+      const transformedData = (b || []).map(book => ({
+        ...book,
+        genres: Array.isArray(book.genres) ? book.genres[0] : book.genres
+      }))
+      setBooks(transformedData as Book[])
       setLoading(false)
     })()
   }, [])
@@ -581,9 +588,9 @@ function AnalyticsTab() {
 
     // colors for the pie
     const palette = [
-      "#6366F1","#22C55E","#F59E0B","#EF4444","#06B6D4","#A855F7","#84CC16",
-      "#EAB308","#F97316","#0EA5E9","#14B8A6","#EC4899","#6B7280","#059669",
-      "#7C3AED","#4ADE80","#F43F5E"
+      "#6366F1", "#22C55E", "#F59E0B", "#EF4444", "#06B6D4", "#A855F7", "#84CC16",
+      "#EAB308", "#F97316", "#0EA5E9", "#14B8A6", "#EC4899", "#6B7280", "#059669",
+      "#7C3AED", "#4ADE80", "#F43F5E"
     ]
     const bg = labels.map((_, i) => palette[i % palette.length])
 
