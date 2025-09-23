@@ -19,7 +19,7 @@ export default function Home() {
   useEffect(() => {
     const fetchGenres = async () => {
       setLoadingGenres(true)
-      const { data } = await supabase.from("genres").select("*").order("name").limit(10)
+      const { data } = await supabase.from("genres").select("*").order("name").limit(12)
       setGenres(data || [])
       setLoadingGenres(false)
     }
@@ -36,7 +36,7 @@ export default function Home() {
       {/* Hero */}
       <section className="max-w-6xl mx-auto px-4 pt-16 pb-10 text-center">
         <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
-          Pothpath — Your Open eLibrary
+          Pothpath - Your Open eLibrary
         </h1>
         <p className="mt-4 text-gray-600 max-w-2xl mx-auto">
           Search, explore, and upload community‑curated books in seconds.

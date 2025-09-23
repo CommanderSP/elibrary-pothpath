@@ -1,7 +1,7 @@
 import "./globals.css"
 import type { Metadata } from "next"
 import Link from "next/link"
-import { NavigationMenu, NavigationMenuItem, NavigationMenuList } from "@/components/ui/navigation-menu"
+import { NavigationMenu, NavigationMenuItem, NavigationMenuList } from "@/components/navigation-menu"
 
 export const metadata: Metadata = {
   title: "Pothpath",
@@ -16,7 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {/* Navigation bar */}
           <header className="border-b">
             <nav className="container mx-auto flex items-center justify-between py-4">
-              <h1 className="text-xl font-bold">📚 Pothpath</h1>
+              <h1 className="text-xl font-bold"><a href="/">📚Pothpath</a></h1>
               <NavigationMenu>
                 <NavigationMenuList>
                   <NavigationMenuItem><Link href="/" className="px-3 py-2 hover:text-blue-600">Home</Link></NavigationMenuItem>
