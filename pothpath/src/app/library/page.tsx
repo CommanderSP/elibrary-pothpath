@@ -85,7 +85,11 @@ export default function LibraryPage() {
 
       if (error) throw error
 
-      const newRows = (data || []) as BookRow[]
+      const transformedData = (data || []).map(book => ({
+        ...book,
+        genres: Array.isArray(book.genres) ? book.genres[0] : book.genres
+      }))
+      const newRows = transformedData as BookRow[]
       setBooks(reset ? newRows : [...books, ...newRows])
       if (count !== null) {
         setHasMore((reset ? newRows.length : books.length + newRows.length) < count)
@@ -188,7 +192,7 @@ export default function LibraryPage() {
           <div>
             <select
               value={sort}
-              onChange={(e) => setSort(e.target.value as any)}
+              onChange={(e) => setSort(e.target.value as "newest" | "oldest" | "az")}
               className="w-full px-3 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             >
               <option value="newest">Sort: Newest first</option>

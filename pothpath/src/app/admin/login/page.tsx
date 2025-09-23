@@ -1,3 +1,4 @@
+// pothpath\src\app\admin\login\page.tsx
 "use client"
 
 import { useState } from "react"
@@ -6,11 +7,11 @@ export default function AdminLogin() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
-  
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault()
-    const adminUser = process.env.NEXT_PUBLIC_ADMIN_USERNAME || process.env.ADMIN_USERNAME
-    const adminPass = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || process.env.ADMIN_PASSWORD
+    const adminUser = process.env.ADMIN_USERNAME
+    const adminPass = process.env.ADMIN_PASSWORD
 
     if (username === adminUser && password === adminPass) {
       localStorage.setItem("isAdmin", "true")

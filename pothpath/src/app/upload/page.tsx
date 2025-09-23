@@ -81,10 +81,9 @@ export default function UploadPage() {
       if (storageError) throw storageError
 
       // 2) Get public URL
-      const { data, error: publicUrlError } = supabase.storage
+      const { data } = supabase.storage
         .from("books")
         .getPublicUrl(filePath)
-      if (publicUrlError) throw publicUrlError
       const fileUrl = data.publicUrl
 
       // 3) Insert DB row with genre_id
