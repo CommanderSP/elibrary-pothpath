@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
+import { ModeToggle } from "@/components/mode-toggle"
 
 export function Navigation() {
     const pathname = usePathname()
@@ -44,6 +45,7 @@ export function Navigation() {
                     </nav>
                 </div>
                 <div className="absolute right-0 top-0 h-14 flex items-center gap-2 pr-4">
+                    <ModeToggle />
                     <Link
                         href="/login"
                         className={buttonVariants({ variant: "outline" })}

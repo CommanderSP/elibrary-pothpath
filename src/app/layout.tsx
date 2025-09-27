@@ -2,6 +2,7 @@ import "./globals.css"
 import type { Metadata, Viewport } from "next";
 import { Navigation } from "@/components/navigation"
 import { Provider as SessionProvider } from "@/components/session-provider";
+import { ThemeProvider } from "@/components/theme-provider"
 
 export const metadata: Metadata = {
   title: "Pothpath",
@@ -17,10 +18,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <SessionProvider>
-          <Navigation />
-          {children}
-        </SessionProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <SessionProvider>
+            <Navigation />
+            {children}
+          </SessionProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
