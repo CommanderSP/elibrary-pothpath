@@ -11,13 +11,13 @@ import {
 } from "@heroicons/react/24/outline"
 
 type BookRow = {
-  id: number | string
+  id: string
   title: string
   author: string | null
   description: string | null
   file_url: string
   created_at?: string | null
-  genres?: { name: string } | null
+  genres: { name: string } | null
 }
 
 type Genre = { id: string; name: string }
@@ -64,7 +64,7 @@ export default function LibraryPage() {
     try {
       let query = supabase
         .from("books")
-        .select("id, title, author, description, file_url, created_at, genres(name)", { count: "exact" })
+        .select("*, genres(name)", { count: "exact" })
         .eq("status", "approved")
 
       if (genreId) query = query.eq("genre_id", genreId)
@@ -74,7 +74,7 @@ export default function LibraryPage() {
         query = query.or(`title.ilike.%${term}%,author.ilike.%${term}%`)
       }
 
-      if (sort === "newest") query = query.order("created_at", { ascending: false, nullsFirst: false })
+      if (sort === "newest") query = query.order("created_at", { ascending: false })
       if (sort === "oldest") query = query.order("created_at", { ascending: true })
       if (sort === "az") query = query.order("title", { ascending: true })
 
@@ -85,12 +85,9 @@ export default function LibraryPage() {
 
       if (error) throw error
 
-      const transformedData = (data || []).map(book => ({
-        ...book,
-        genres: Array.isArray(book.genres) ? book.genres[0] : book.genres
-      }))
-      const newRows = transformedData as BookRow[]
+      const newRows = (data || []) as BookRow[]
       setBooks(reset ? newRows : [...books, ...newRows])
+
       if (count !== null) {
         setHasMore((reset ? newRows.length : books.length + newRows.length) < count)
       } else {
@@ -137,7 +134,7 @@ export default function LibraryPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-120px)] bg-gradient-to-br from-slate-50 via-white to-slate-100">
+    <div className="min-h-[calc(100vh-120px)]">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <motion.div
@@ -147,10 +144,10 @@ export default function LibraryPage() {
         >
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight">📚 Pothpath Library</h1>
-            <p className="text-sm text-gray-500">Explore approved books. Use search and filters to find what you want.</p>
+            <p className="text-sm">Explore approved books. Use search and filters to find what you want.</p>
           </div>
-          <div className="text-sm text-gray-500">
-            Showing <span className="font-medium text-gray-800">{formattedCount}</span> result{formattedCount === 1 ? "" : "s"}
+          <div className="text-sm">
+            Showing <span className="font-medium">{formattedCount}</span> result{formattedCount === 1 ? "" : "s"}
           </div>
         </motion.div>
 
@@ -162,22 +159,22 @@ export default function LibraryPage() {
         >
           {/* Search */}
           <div className="relative">
-            <MagnifyingGlassIcon className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search title or author..."
-              className="w-full pl-10 pr-3 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full pl-10 pr-3 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           {/* Genre Filter */}
           <div className="relative">
-            <FunnelIcon className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <FunnelIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2" />
             <select
               value={genreId}
               onChange={(e) => setGenreId(e.target.value)}
-              className="w-full pl-10 pr-3 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full pl-10 pr-3 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">All Genres</option>
               {genres.map((g) => (
@@ -193,7 +190,7 @@ export default function LibraryPage() {
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as "newest" | "oldest" | "az")}
-              className="w-full px-3 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full px-3 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="newest">Sort: Newest first</option>
               <option value="oldest">Sort: Oldest first</option>
@@ -206,11 +203,11 @@ export default function LibraryPage() {
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-40 rounded-xl border bg-white shadow-sm p-4">
-                <div className="h-5 w-1/2 bg-gray-100 rounded animate-pulse mb-3" />
-                <div className="h-4 w-1/3 bg-gray-100 rounded animate-pulse mb-2" />
-                <div className="h-3 w-3/4 bg-gray-100 rounded animate-pulse mb-1.5" />
-                <div className="h-3 w-2/3 bg-gray-100 rounded animate-pulse" />
+              <div key={i} className="h-40 rounded-xl border shadow-sm p-4">
+                <div className="h-5 w-1/2 rounded animate-pulse mb-3" />
+                <div className="h-4 w-1/3 rounded animate-pulse mb-2" />
+                <div className="h-3 w-3/4 rounded animate-pulse mb-1.5" />
+                <div className="h-3 w-2/3 rounded animate-pulse" />
               </div>
             ))}
           </div>
@@ -230,7 +227,7 @@ export default function LibraryPage() {
               {books.map((book) => (
                 <motion.li
                   key={book.id}
-                  className="group border rounded-xl bg-white shadow-sm hover:shadow-md transition overflow-hidden"
+                  className="group border rounded-xl shadow-sm hover:shadow-md transition overflow-hidden"
                   variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
                 >
                   <div className="p-5">
@@ -239,15 +236,15 @@ export default function LibraryPage() {
                         {book.genres?.name || "Uncategorized"}
                       </span>
                       {book.created_at && (
-                        <span className="text-xs text-gray-400 ml-auto">{formatWhen(book.created_at)}</span>
+                        <span className="text-xs ml-auto">{formatWhen(book.created_at)}</span>
                       )}
                     </div>
 
                     <h2 className="text-lg font-semibold leading-snug line-clamp-2">{book.title}</h2>
-                    {book.author && <p className="text-sm text-gray-600 mt-1">{book.author}</p>}
+                    {book.author && <p className="text-sm mt-1">{book.author}</p>}
 
                     {book.description && (
-                      <p className="text-sm text-gray-700 mt-3 line-clamp-3">{book.description}</p>
+                      <p className="text-sm mt-3 line-clamp-3">{book.description}</p>
                     )}
 
                     <div className="mt-4 flex items-center gap-2">
@@ -255,7 +252,7 @@ export default function LibraryPage() {
                         href={book.file_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                        className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-md bg-primary-foreground hover:bg-primary"
                       >
                         <DocumentTextIcon className="w-5 h-5" />
                         View PDF
@@ -264,7 +261,7 @@ export default function LibraryPage() {
                       <a
                         href={book.file_url}
                         download
-                        className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-md border hover:bg-gray-50"
+                        className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-md border"
                       >
                         <ArrowDownTrayIcon className="w-5 h-5" />
                         Download
@@ -272,7 +269,7 @@ export default function LibraryPage() {
 
                       <button
                         onClick={() => onCopy(book.file_url)}
-                        className="ml-auto text-xs text-gray-500 hover:text-gray-700"
+                        className="ml-auto text-xs text-blue-500 hover:text-blue-700"
                       >
                         Copy link
                       </button>
@@ -287,7 +284,7 @@ export default function LibraryPage() {
                 <button
                   onClick={() => fetchBooks(false)}
                   disabled={loadingMore}
-                  className="px-4 py-2 rounded-md bg-white border shadow-sm hover:bg-gray-50"
+                  className="px-4 py-2 rounded-md border shadow-sm"
                 >
                   {loadingMore ? "Loading..." : "Load more"}
                 </button>
@@ -305,13 +302,13 @@ function EmptyState() {
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="text-center py-16 bg-white rounded-2xl border shadow-sm"
+      className="text-center py-16 rounded-2xl border shadow-sm"
     >
-      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 mb-3">
+      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full mb-3">
         <DocumentTextIcon className="w-6 h-6" />
       </div>
-      <h3 className="text-lg font-semibold">No approved books yet</h3>
-      <p className="text-sm text-gray-500 mt-1">Check back soon or upload one if you’re an author!</p>
+      <h3 className="text-lg font-semibold">No books found</h3>
+      <p className="text-sm mt-1">Try adjusting your search or filters</p>
     </motion.div>
   )
 }
