@@ -145,7 +145,12 @@ export default function UploadPage() {
           cacheControl: '3600'
         })
 
-      if (storageError) throw storageError
+      if (storageError) {
+        if (storageError.message.includes("Bucket not found")) {
+          throw new Error("Storage bucket not found. Please contact administrator.")
+        }
+        throw storageError
+      }
 
       // 2) Get public URL
       const { data: urlData } = supabase.storage
