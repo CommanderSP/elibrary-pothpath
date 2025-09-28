@@ -64,12 +64,15 @@ type AnalyticsBook = {
   download_count: number
 }
 
+const ALLOWED_ADMIN_EMAILS = process.env.NEXT_PUBLIC_ALLOWED_ADMIN_EMAILS?.split(',') || []
+
 export default function AdminPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [accessDenied, setAccessDenied] = useState(false)
 
-  // Check if user is admin
+  // Check if user is admin and has allowed email
   useEffect(() => {
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession()
@@ -77,6 +80,15 @@ export default function AdminPage() {
         router.push("/login")
         return
       }
+
+      // Check if user's email is in the allowed list
+      const userEmail = session.user.email
+      if (!userEmail || !ALLOWED_ADMIN_EMAILS.includes(userEmail)) {
+        setAccessDenied(true)
+        setLoading(false)
+        return
+      }
+
       setUser(session.user)
       setLoading(false)
     }
@@ -99,6 +111,25 @@ export default function AdminPage() {
     )
   }
 
+  if (accessDenied) {
+    return (
+      <div className="min-h-[calc(100vh-120px)] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <XCircle className="w-8 h-8 text-destructive" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">Access Denied</h1>
+          <p className="text-muted-foreground mb-6">
+            You don't have permission to access the admin panel.
+          </p>
+          <Button onClick={() => router.push("/")}>
+            Return to Home
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-[calc(100vh-120px)]">
       <div className="max-w-7xl mx-auto px-4 py-6">
@@ -113,10 +144,15 @@ export default function AdminPage() {
               <p className="text-muted-foreground">Manage books, genres, and view analytics</p>
             </div>
           </div>
-          <Button variant="outline" onClick={handleLogout} className="flex items-center gap-2 sm:w-auto w-full">
-            <LogOut className="w-4 h-4" />
-            Logout
-          </Button>
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-muted-foreground">
+              Logged in as: {user?.email}
+            </div>
+            <Button variant="outline" onClick={handleLogout} className="flex items-center gap-2 sm:w-auto w-full">
+              <LogOut className="w-4 h-4" />
+              Logout
+            </Button>
+          </div>
         </div>
 
         <Tabs defaultValue="books" className="space-y-6">
@@ -172,25 +208,35 @@ function BooksTab() {
   }, [search, status, sort])
 
   async function fetchGenres() {
-    const { data, error } = await supabase
-      .from("genres")
-      .select("*")
-      .eq("is_active", true)
-      .order("sort_order")
-    if (!error && data) setGenres(data)
-  }
+    try {
+      const { data, error } = await supabase
+        .from("genres")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order")
 
+      if (error) {
+        console.error('Error fetching genres:', error)
+        throw error
+      }
+
+      if (data) setGenres(data)
+    } catch (error) {
+      console.error('Failed to fetch genres:', error)
+      alert('Failed to load genres. Check console for details.')
+    }
+  }
   async function fetchBooks() {
     setLoading(true)
     try {
       let query = supabase
         .from("books")
         .select(`
-          *,
-          genres (
-            name
-          )
-        `)
+        *,
+        genres (
+          name
+        )
+      `)
 
       if (status !== "all") query = query.eq("status", status)
       if (search.trim()) {
@@ -202,7 +248,10 @@ function BooksTab() {
       if (sort === "az") query = query.order("title", { ascending: true })
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) {
+        console.error('Supabase query error:', error)
+        throw error
+      }
 
       const booksData = (data || []).map(book => ({
         ...book,
@@ -210,8 +259,18 @@ function BooksTab() {
       })) as Book[]
 
       setBooks(booksData)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching books:", error)
+
+      // More specific error messages
+      if (error.message?.includes('Failed to fetch')) {
+        alert('Network error: Cannot connect to Supabase. Check your internet connection and Supabase project status.')
+      } else if (error.code === 'PGRST301') {
+        alert('Database error: The books table might not exist or you lack permissions.')
+      } else {
+        alert(`Failed to load books: ${error.message}`)
+      }
+
       setBooks([])
     } finally {
       setLoading(false)
@@ -219,26 +278,47 @@ function BooksTab() {
   }
 
   async function updateStatus(id: string, newStatus: Book["status"]) {
-    const { error } = await supabase
-      .from("books")
-      .update({
+    try {
+      const updateData: any = {
         status: newStatus,
-        approved_at: newStatus === "approved" ? new Date().toISOString() : null
-      })
-      .eq("id", id)
+        updated_at: new Date().toISOString(), // Set the updated_at field
+      }
 
-    if (error) {
-      alert("Failed to update status")
-      return
-    }
+      // Only set approved_at when approving
+      if (newStatus === "approved") {
+        updateData.approved_at = new Date().toISOString()
+      }
 
-    // Remove from current view if not showing "all"
-    if (status !== "all") {
-      setBooks(prev => prev.filter(book => book.id !== id))
-    } else {
-      fetchBooks() // Refresh to update status
+      const { error } = await supabase
+        .from("books")
+        .update(updateData)
+        .eq("id", id)
+
+      if (error) {
+        console.error('Update status error:', error)
+
+        if (error.code === '23503') {
+          alert("Database constraint error: The book might reference invalid data.")
+        } else if (error.code === '42501') {
+          alert("Permission denied: Check RLS policies.")
+        } else {
+          alert(`Failed to update status: ${error.message}`)
+        }
+        return
+      }
+
+      // Remove from current view if not showing "all"
+      if (status !== "all") {
+        setBooks(prev => prev.filter(book => book.id !== id))
+      } else {
+        fetchBooks() // Refresh to update status
+      }
+    } catch (error: any) {
+      console.error('Error updating status:', error)
+      alert(`Failed to update status: ${error.message}`)
     }
   }
+
 
   async function deleteBook(id: string) {
     if (!confirm("Are you sure you want to delete this book?")) return
