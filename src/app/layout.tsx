@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next";
 import { Navigation } from "@/components/navigation"
 import { Provider as SessionProvider } from "@/components/session-provider";
 import { ThemeProvider } from "@/components/theme-provider"
+import Footer from "@/components/footer"
 
 export const metadata: Metadata = {
   title: "Pothpath",
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SessionProvider>
             <Navigation />
             {children}
+            <Footer />
           </SessionProvider>
         </ThemeProvider>
       </body>

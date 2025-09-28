@@ -1,6 +1,3 @@
--- WARNING: This schema is for context only and is not meant to be run.
--- Table order and constraints may not be valid for execution.
-
 CREATE TABLE public.books (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   title character varying NOT NULL CHECK (char_length(title::text) >= 1),
@@ -8,30 +5,18 @@ CREATE TABLE public.books (
   description text,
   file_url text,
   genre_id uuid,
-  isbn character varying,
   publication_date date,
-  language character varying DEFAULT 'en'::character varying,
-  page_count integer CHECK (page_count > 0 OR page_count IS NULL),
   file_size_bytes bigint CHECK (file_size_bytes > 0 OR file_size_bytes IS NULL),
-  file_type character varying,
-  cover_image_url text,
-  reading_level character varying,
   tags ARRAY,
   status character varying DEFAULT 'approved'::character varying CHECK (status::text = ANY (ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying, 'archived'::character varying]::text[])),
-  is_featured boolean DEFAULT false,
   is_public boolean DEFAULT true,
   download_count integer DEFAULT 0 CHECK (download_count >= 0),
-  average_rating numeric CHECK (average_rating >= 0::numeric AND average_rating <= 5::numeric),
-  rating_count integer DEFAULT 0,
   created_at timestamp without time zone DEFAULT now(),
   updated_at timestamp without time zone DEFAULT now(),
   published_at timestamp without time zone,
   created_by uuid,
-  updated_by uuid,
   approved_by uuid,
   approved_at timestamp without time zone,
-  version integer DEFAULT 1,
-  search_vector tsvector,
   CONSTRAINT books_pkey PRIMARY KEY (id),
   CONSTRAINT books_genre_fkey FOREIGN KEY (genre_id) REFERENCES public.genres(id)
 );
@@ -46,7 +31,6 @@ CREATE TABLE public.genres (
   created_at timestamp without time zone DEFAULT now(),
   updated_at timestamp without time zone DEFAULT now(),
   created_by uuid,
-  updated_by uuid,
   version integer DEFAULT 1,
   CONSTRAINT genres_pkey PRIMARY KEY (id)
 );
