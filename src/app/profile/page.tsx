@@ -1,3 +1,4 @@
+// src/app/profile/page.tsx
 "use client"
 
 import { useEffect, useState } from "react"
@@ -5,9 +6,6 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -31,6 +29,7 @@ type UserProfile = {
     user_metadata?: {
         full_name?: string
         avatar_url?: string
+        picture?: string
         bio?: string
     }
     created_at: string
@@ -55,10 +54,6 @@ export default function ProfilePage() {
     const [loading, setLoading] = useState(true)
     const [editing, setEditing] = useState(false)
     const [saving, setSaving] = useState(false)
-    const [formData, setFormData] = useState({
-        full_name: "",
-        bio: ""
-    })
 
     useEffect(() => {
         const getProfile = async () => {
@@ -72,15 +67,14 @@ export default function ProfilePage() {
             setUser({
                 id: session.user.id,
                 email: session.user.email!,
-                user_metadata: session.user.user_metadata,
+                user_metadata: {
+                    full_name: session.user.user_metadata?.full_name || "",
+                    bio: session.user.user_metadata?.bio || "",
+                    avatar_url: session.user.user_metadata?.avatar_url || "",
+                    picture: session.user.user_metadata?.picture || ""
+                },
                 created_at: session.user.created_at
             })
-
-            setFormData({
-                full_name: session.user.user_metadata?.full_name || "",
-                bio: session.user.user_metadata?.bio || ""
-            })
-
             // Fetch user's uploaded books
             const { data: books, error } = await supabase
                 .from("books")
@@ -102,32 +96,6 @@ export default function ProfilePage() {
         if (!user) return
 
         setSaving(true)
-        try {
-            const { error } = await supabase.auth.updateUser({
-                data: {
-                    full_name: formData.full_name,
-                    bio: formData.bio
-                }
-            })
-
-            if (error) throw error
-
-            // Update local user state
-            setUser(prev => prev ? {
-                ...prev,
-                user_metadata: {
-                    ...prev.user_metadata,
-                    full_name: formData.full_name,
-                    bio: formData.bio
-                }
-            } : null)
-
-            setEditing(false)
-        } catch (error) {
-            console.error("Error updating profile:", error)
-        } finally {
-            setSaving(false)
-        }
     }
 
     const handleLogout = async () => {
@@ -162,6 +130,11 @@ export default function ProfilePage() {
         return <Badge variant={config.variant}>{config.label}</Badge>
     }
 
+    // Helper function to get avatar URL
+    const getAvatarUrl = () => {
+        return user?.user_metadata?.avatar_url || user?.user_metadata?.picture || ""
+    }
+
     if (loading) {
         return (
             <div className="min-h-[calc(100vh-120px)] flex items-center justify-center">
@@ -188,10 +161,6 @@ export default function ProfilePage() {
                             Manage your account and view your uploaded books
                         </p>
                     </div>
-                    <Button variant="outline" onClick={handleLogout} className="flex items-center gap-2 sm:w-auto w-full">
-                        <LogOut className="w-4 h-4" />
-                        Logout
-                    </Button>
                 </div>
 
                 <div className="grid gap-6 lg:grid-cols-3">
@@ -202,23 +171,15 @@ export default function ProfilePage() {
                             <CardHeader className="text-center">
                                 <div className="flex justify-center mb-4">
                                     <Avatar className="w-24 h-24 border-4 border-background">
-                                        <AvatarImage src={user.user_metadata?.avatar_url} />
+                                        <AvatarImage
+                                            src={getAvatarUrl()}
+                                            alt={user.user_metadata?.full_name || user.email}
+                                        />
                                         <AvatarFallback className="text-lg">
-                                            {getInitials(formData.full_name, user.email)}
+                                            {getInitials(user.user_metadata?.full_name || "", user.email)}
                                         </AvatarFallback>
                                     </Avatar>
                                 </div>
-                                <CardTitle>
-                                    {editing ? (
-                                        <Input
-                                            value={formData.full_name}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
-                                            placeholder="Full Name"
-                                        />
-                                    ) : (
-                                        user.user_metadata?.full_name || "Anonymous User"
-                                    )}
-                                </CardTitle>
                                 <CardDescription className="flex items-center justify-center gap-2">
                                     <Mail className="w-4 h-4" />
                                     {user.email}
@@ -241,56 +202,6 @@ export default function ProfilePage() {
                                 </div>
 
                                 <Separator />
-
-                                <div>
-                                    <Label htmlFor="bio" className="text-sm font-medium mb-2 block">
-                                        Bio
-                                    </Label>
-                                    {editing ? (
-                                        <Textarea
-                                            id="bio"
-                                            value={formData.bio}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
-                                            placeholder="Tell us about yourself..."
-                                            rows={4}
-                                        />
-                                    ) : (
-                                        <p className="text-sm text-muted-foreground">
-                                            {user.user_metadata?.bio || "No bio yet."}
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div className="flex gap-2">
-                                    {editing ? (
-                                        <>
-                                            <Button
-                                                onClick={handleSaveProfile}
-                                                disabled={saving}
-                                                className="flex-1 flex items-center gap-2"
-                                            >
-                                                <Save className="w-4 h-4" />
-                                                {saving ? "Saving..." : "Save"}
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                onClick={() => setEditing(false)}
-                                                className="flex items-center gap-2"
-                                            >
-                                                <X className="w-4 h-4" />
-                                                Cancel
-                                            </Button>
-                                        </>
-                                    ) : (
-                                        <Button
-                                            onClick={() => setEditing(true)}
-                                            className="w-full flex items-center gap-2"
-                                        >
-                                            <Edit3 className="w-4 h-4" />
-                                            Edit Profile
-                                        </Button>
-                                    )}
-                                </div>
                             </CardContent>
                         </Card>
                     </div>

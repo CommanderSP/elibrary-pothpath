@@ -17,10 +17,6 @@ const footerLinks = [
         href: "/library",
     },
     {
-        title: "Pricing",
-        href: "#",
-    },
-    {
         title: "Upload",
         href: "/upload",
     },

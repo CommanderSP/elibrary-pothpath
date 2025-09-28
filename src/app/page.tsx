@@ -158,20 +158,6 @@ export default function Home() {
           <Card className="border-2 hover:shadow-lg transition-shadow">
             <CardHeader>
               <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                <Book className="w-6 h-6 text-primary" />
-              </div>
-              <CardTitle>Vast Collection</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Access thousands of books across multiple genres. From classics to contemporary works.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
                 <Cloud className="w-6 h-6 text-primary" />
               </div>
               <CardTitle>Easy Upload</CardTitle>
@@ -179,20 +165,6 @@ export default function Home() {
             <CardContent>
               <p className="text-muted-foreground">
                 Share your knowledge by uploading PDFs. Simple, fast, and secure file handling.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                <Shield className="w-6 h-6 text-primary" />
-              </div>
-              <CardTitle>Secure Platform</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Your privacy and security are our top priorities. Read and share with confidence.
               </p>
             </CardContent>
           </Card>
