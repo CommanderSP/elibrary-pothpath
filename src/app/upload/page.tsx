@@ -1,54 +1,84 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
-import { motion } from "framer-motion"
-import { CloudArrowUpIcon, DocumentTextIcon } from "@heroicons/react/24/outline"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { CloudUpload, FileText, X, Loader2 } from "lucide-react"
 
-type Genre = { id: string; name: string }
+type Genre = {
+  id: string
+  name: string
+  slug: string
+  color_code?: string
+  is_active: boolean
+  sort_order: number
+}
 
 export default function UploadPage() {
+  const router = useRouter()
   const [title, setTitle] = useState("")
   const [author, setAuthor] = useState("")
   const [description, setDescription] = useState("")
   const [file, setFile] = useState<File | null>(null)
-
-  // Genres (dynamic)
   const [genres, setGenres] = useState<Genre[]>([])
   const [genreId, setGenreId] = useState<string>("")
   const [loadingGenres, setLoadingGenres] = useState(true)
+  const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
+  const [user, setUser] = useState<any>(null)
 
+  // Check if user is logged in
+  useEffect(() => {
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push("/login")
+        return
+      }
+      setUser(session.user)
+    }
+    getSession()
+  }, [router])
+
+  // Fetch genres
   useEffect(() => {
     const fetchGenres = async () => {
-      setLoadingGenres(true);
+      setLoadingGenres(true)
 
       const { data, error } = await supabase
         .from("genres")
         .select("id, name, slug, color_code, is_active, sort_order")
+        .eq("is_active", true)
         .order("sort_order")
-        .eq("is_active", true);
 
       if (error) {
-        console.error("Error loading genres:", error);
+        console.error("Error loading genres:", error)
       } else {
-        console.log("Fetched genres:", data);  // Log the fetched data for debugging
-        setGenres((data || []) as Genre[]);
+        setGenres(data || [])
         if (data && data.length > 0) {
-          setGenreId(data[0].id);
+          setGenreId(data[0].id)
         }
       }
-      setLoadingGenres(false);
-    };
+      setLoadingGenres(false)
+    }
 
-    fetchGenres();
-  }, []);
-
+    fetchGenres()
+  }, [])
 
   const onFileInput = (f: File | null) => {
     if (!f) return
     if (f.type !== "application/pdf") {
       alert("Please upload a PDF file")
+      return
+    }
+    if (f.size > 50 * 1024 * 1024) { // 50MB limit
+      alert("File size must be less than 50MB")
       return
     }
     setFile(f)
@@ -59,10 +89,12 @@ export default function UploadPage() {
     e.preventDefault()
     setDragActive(true)
   }
+
   const handleDragLeave = (e: React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault()
     setDragActive(false)
   }
+
   const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault()
     setDragActive(false)
@@ -72,175 +104,273 @@ export default function UploadPage() {
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!file) return alert("Please select a PDF file")
-    if (!genreId) return alert("Please select a genre")
+
+    if (!user) {
+      alert("Please log in to upload books")
+      router.push("/login")
+      return
+    }
+
+    if (!file) {
+      alert("Please select a PDF file")
+      return
+    }
+
+    if (!title.trim()) {
+      alert("Please enter a title")
+      return
+    }
+
+    if (!author.trim()) {
+      alert("Please enter an author")
+      return
+    }
+
+    if (!genreId) {
+      alert("Please select a genre")
+      return
+    }
+
+    setUploading(true)
 
     try {
-
       // 1) Upload file to Storage
       const safeTitle = title.trim().replace(/\s+/g, "_").slice(0, 60)
-      const filePath = `${Date.now()}_${safeTitle || "book"}.pdf`
+      const filePath = `${user.id}/${Date.now()}_${safeTitle}.pdf`
+
       const { error: storageError } = await supabase.storage
         .from("books")
-        .upload(filePath, file, { upsert: false })
+        .upload(filePath, file, {
+          upsert: false,
+          cacheControl: '3600'
+        })
 
       if (storageError) throw storageError
 
       // 2) Get public URL
-      const { data } = supabase.storage
+      const { data: urlData } = supabase.storage
         .from("books")
         .getPublicUrl(filePath)
-      const fileUrl = data.publicUrl
+      const fileUrl = urlData.publicUrl
 
-      // 3) Insert DB row with genre_id
-      const { error: dbError } = await supabase.from("books").insert([
-        { title, author, description, file_url: fileUrl, genre_id: genreId, status: "pending" },
-      ])
+      // 3) Insert DB row with correct column names
+      const { error: dbError } = await supabase.from("books").insert([{
+        title: title.trim(),
+        author: author.trim(),
+        description: description.trim() || null,
+        file_url: fileUrl,
+        genre_id: genreId,
+        file_size_bytes: file.size,
+        status: "pending",
+        is_public: true,
+        upload_by: user.id,
+        upload_at: new Date().toISOString()
+      }])
+
       if (dbError) throw dbError
 
-      alert("🎉 Book uploaded successfully (awaiting approval)")
+      alert("🎉 Book uploaded successfully! It's now pending approval.")
+
+      // Reset form
       setTitle("")
       setAuthor("")
       setDescription("")
       setFile(null)
       if (genres.length > 0) setGenreId(genres[0].id)
-    } catch (err) {
+
+    } catch (err: any) {
       console.error("Upload failed:", err)
-      alert("❌ Upload failed — check console for details")
+      alert(`❌ Upload failed: ${err.message}`)
     } finally {
+      setUploading(false)
     }
   }
 
-  return (
-    <div className="min-h-[calc(100vh-120px)] bg-gradient-to-br flex items-center justify-center px-4 py-10">
-      <motion.div
-        className="w-full max-w-2xl backdrop-blur rounded-2xl shadow-xl border"
-        initial={{ y: 24, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.4 }}
-      >
-        <div className="px-6 sm:px-8 pt-7 pb-2 border-b">
-          <h1 className="text-3xl font-extrabold tracking-tight text-center">
-          </h1>
-          <p className="text-center text-sm mt-2">
-          </p>
+  const resetForm = () => {
+    setTitle("")
+    setAuthor("")
+    setDescription("")
+    setFile(null)
+    if (genres.length > 0) setGenreId(genres[0].id)
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-[calc(100vh-120px)] flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" />
+          <p>Checking authentication...</p>
         </div>
+      </div>
+    )
+  }
 
-        <form onSubmit={handleUpload} className="p-6 sm:p-8 space-y-5">
-          {/* Title */}
-          <div>
-            <label className="text-sm font-medium">Title</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              placeholder="Enter title..."
-              className="mt-1 w-full border px-4 py-2.5 rounded-lg shadow-sm focus:outline-none focus:ring-2"
-            />
-          </div>
+  return (
+    <div className="min-h-[calc(100vh-120px)] py-8">
+      <div className="max-w-2xl mx-auto px-4">
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl font-bold">Upload a Book</CardTitle>
+            <CardDescription>
+              Share your knowledge with the Pothpath community
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpload} className="space-y-6">
+              {/* Title */}
+              <div className="space-y-2">
+                <Label htmlFor="title">Title *</Label>
+                <Input
+                  id="title"
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  placeholder="Enter book title..."
+                  disabled={uploading}
+                />
+              </div>
 
-          {/* Author */}
-          <div>
-            <label className="text-sm font-medium">Author</label>
-            <input
-              type="text"
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              placeholder="Author name..."
-              className="mt-1 w-full border px-4 py-2.5 rounded-lg shadow-sm focus:outline-none focus:ring-2"
-            />
-          </div>
+              {/* Author */}
+              <div className="space-y-2">
+                <Label htmlFor="author">Author *</Label>
+                <Input
+                  id="author"
+                  type="text"
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  required
+                  placeholder="Enter author name..."
+                  disabled={uploading}
+                />
+              </div>
 
-          {/* Description */}
-          <div>
-            <label className="text-sm font-medium">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description..."
-              className="mt-1 w-full border px-4 py-2.5 rounded-lg shadow-sm focus:outline-none focus:ring-2 h-28"
-            />
-          </div>
+              {/* Description */}
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Brief description of the book..."
+                  className="min-h-[100px]"
+                  disabled={uploading}
+                />
+              </div>
 
-          {/* Genre */}
-          <div>
-            <label className="text-sm font-medium">Genre</label>
-            <div className="mt-1">
-              {loadingGenres ? (
-                <div className="w-full h-10 rounded-lg animate-pulse" />
-              ) : (
-                <select
-                  value={genreId}
-                  onChange={(e) => setGenreId(e.target.value)}
-                  className="w-full border px-4 py-2.5 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              {/* Genre */}
+              <div className="space-y-2">
+                <Label htmlFor="genre">Genre *</Label>
+                {loadingGenres ? (
+                  <div className="h-10 w-full rounded-md border bg-muted animate-pulse" />
+                ) : (
+                  <Select value={genreId} onValueChange={setGenreId} disabled={uploading}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a genre" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {genres.map((genre) => (
+                        <SelectItem key={genre.id} value={genre.id}>
+                          {genre.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              {/* File Upload */}
+              <div className="space-y-2">
+                <Label htmlFor="file">PDF File *</Label>
+                <label
+                  htmlFor="fileInput"
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`
+                    flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8 cursor-pointer transition-colors
+                    ${dragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25"}
+                    ${uploading ? "opacity-50 cursor-not-allowed" : "hover:border-primary hover:bg-primary/5"}
+                  `}
                 >
-                  {genres.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </div>
+                  {file ? (
+                    <div className="text-center">
+                      <FileText className="w-12 h-12 mx-auto mb-2 text-green-600" />
+                      <p className="font-medium">{file.name}</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {(file.size / (1024 * 1024)).toFixed(2)} MB
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <CloudUpload className="w-12 h-12 mx-auto mb-2 text-muted-foreground" />
+                      <p className="font-medium">Drag & drop your PDF here</p>
+                      <p className="text-sm text-muted-foreground mt-1">or click to browse</p>
+                      <p className="text-xs text-muted-foreground mt-2">Max 50MB</p>
+                    </div>
+                  )}
+                  <input
+                    id="fileInput"
+                    type="file"
+                    accept="application/pdf"
+                    onChange={(e) => onFileInput(e.target.files?.[0] || null)}
+                    className="hidden"
+                    disabled={uploading}
+                  />
+                </label>
 
-          {/* Drag & drop file zone */}
-          <div>
-            <label className="text-sm font-medium">PDF File</label>
-            <motion.label
-              htmlFor="fileInput"
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              whileHover={{ scale: 1.01 }}
-              className={`mt-1 flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 cursor-pointer transition"
-                }`}
-            >
-              <CloudArrowUpIcon className="w-10 h-10 mb-2" />
-              {file ? (
-                <p className="text-sm flex items-center gap-2">
-                  <DocumentTextIcon className="w-5 h-5" />
-                  {file.name}
-                </p>
-              ) : (
-                <p className="text-sm">Drag & drop or click to choose a PDF</p>
-              )}
-              <input
-                id="fileInput"
-                type="file"
-                accept="application/pdf"
-                onChange={(e) => onFileInput(e.target.files?.[0] || null)}
-                className="hidden"
-              />
-            </motion.label>
-            <p className="text-xs mt-1">Max 50MB</p>
-          </div>
+                {file && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFile(null)}
+                    disabled={uploading}
+                    className="mt-2"
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Remove File
+                  </Button>
+                )}
+              </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-3 pt-2">
-            <motion.button
-              type="submit"
-              disabled={loadingGenres || !genreId}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className={`flex-1 py-3 rounded-lg font-semibold shadow-sm transition`}
-            >Upload
-            </motion.button>
+              {/* Actions */}
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="submit"
+                  disabled={uploading || !file || !title.trim() || !author.trim() || !genreId}
+                  className="flex-1"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <CloudUpload className="w-4 h-4 mr-2" />
+                      Upload Book
+                    </>
+                  )}
+                </Button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setTitle(""); setAuthor(""); setDescription(""); setFile(null)
-                if (genres.length > 0) setGenreId(genres[0].id)
-              }}
-              className="px-4 py-3 rounded-lg border"
-            >
-              Reset
-            </button>
-          </div>
-        </form>
-      </motion.div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetForm}
+                  disabled={uploading}
+                >
+                  Reset
+                </Button>
+              </div>
+
+              <div className="text-xs text-muted-foreground text-center">
+                * Required fields. All uploads will be reviewed before being published.
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

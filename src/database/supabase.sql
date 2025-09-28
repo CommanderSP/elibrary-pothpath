@@ -14,6 +14,8 @@ CREATE TABLE public.books (
   upload_by uuid,
   approved_by uuid,
   approved_at timestamp without time zone,
+  search_vector tsvector,
+  tags ARRAY,
   CONSTRAINT books_pkey PRIMARY KEY (id),
   CONSTRAINT books_genre_fkey FOREIGN KEY (genre_id) REFERENCES public.genres(id)
 );
