@@ -1,0 +1,37 @@
+CREATE TABLE public.books (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  title character varying NOT NULL CHECK (char_length(title::text) >= 1),
+  author character varying NOT NULL CHECK (char_length(author::text) >= 1),
+  description text,
+  file_url text,
+  genre_id uuid,
+  file_size_bytes bigint CHECK (file_size_bytes > 0 OR file_size_bytes IS NULL),
+  status character varying DEFAULT 'approved'::character varying CHECK (status::text = ANY (ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying, 'archived'::character varying]::text[])),
+  is_public boolean DEFAULT true,
+  upload_at timestamp without time zone DEFAULT now(),
+  published_at timestamp without time zone,
+  upload_by uuid,
+  approved_by uuid,
+  approved_at timestamp without time zone,
+  search_vector tsvector,
+  tags ARRAY,
+  updated_at timestamp without time zone DEFAULT now(),
+  version integer,
+  CONSTRAINT books_pkey PRIMARY KEY (id),
+  CONSTRAINT books_genre_fkey FOREIGN KEY (genre_id) REFERENCES public.genres(id)
+);
+CREATE TABLE public.genres (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name character varying NOT NULL UNIQUE CHECK (char_length(name::text) >= 1),
+  description text,
+  slug character varying UNIQUE,
+  color_code character varying CHECK (color_code::text ~ '^#[0-9A-Fa-f]{6}$'::text OR color_code IS NULL),
+  is_active boolean DEFAULT true,
+  sort_order integer DEFAULT 0,
+  created_at timestamp without time zone DEFAULT now(),
+  updated_at timestamp without time zone DEFAULT now(),
+  created_by uuid,
+  updated_by uuid,
+  version integer DEFAULT 1,
+  CONSTRAINT genres_pkey PRIMARY KEY (id)
+);
