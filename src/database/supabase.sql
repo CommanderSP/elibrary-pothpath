@@ -16,6 +16,8 @@ CREATE TABLE public.books (
   approved_at timestamp without time zone,
   search_vector tsvector,
   tags ARRAY,
+  updated_at timestamp without time zone DEFAULT now(),
+  version integer,
   CONSTRAINT books_pkey PRIMARY KEY (id),
   CONSTRAINT books_genre_fkey FOREIGN KEY (genre_id) REFERENCES public.genres(id)
 );
