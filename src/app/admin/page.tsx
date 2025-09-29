@@ -4,64 +4,18 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabaseClient"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Cog,
   LogOut,
-  RefreshCw,
-  CheckCircle,
   XCircle,
-  Edit,
-  Trash2,
-  FileText,
-  Search,
-  Filter,
   BookOpen,
   BarChart3,
   Tag,
-  Download,
-  User,
-  Calendar
 } from "lucide-react"
 import { BooksTab } from "@/components/admin/BooksTab"
 import { GenresTab } from "@/components/admin/GenresTab"
 import { AnalyticsTab } from "@/components/admin/AnalyticsTab"
-
-type Genre = {
-  id: string;
-  name: string;
-  slug?: string;
-  color_code?: string;
-  is_active: boolean;
-  sort_order: number;
-}
-
-type Book = {
-  id: string
-  title: string
-  author: string
-  description: string | null
-  status: "pending" | "approved" | "rejected" | "archived"
-  upload_at: string
-  file_url: string
-  genre_id: string | null
-  file_size_bytes: number | null
-  download_count: number
-  is_public: boolean
-  upload_by: string | null
-  genres?: { name: string } | null
-}
-
-type AnalyticsBook = {
-  id: string
-  status: "pending" | "approved" | "rejected" | "archived"
-  genre_id: string | null
-  genres: { name: string } | null
-  download_count: number
-}
 
 const ALLOWED_ADMIN_EMAILS = process.env.NEXT_PUBLIC_ALLOWED_ADMIN_EMAILS?.split(',') || []
 
