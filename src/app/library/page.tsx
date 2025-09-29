@@ -2,13 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   MagnifyingGlassIcon,
   FunnelIcon,
   ArrowDownTrayIcon,
   DocumentTextIcon,
+  HeartIcon,
+  ShareIcon,
+  BookmarkIcon,
+  XMarkIcon,
+  AdjustmentsHorizontalIcon,
+  Squares2X2Icon,
+  ListBulletIcon
 } from "@heroicons/react/24/outline"
+import {
+  HeartIcon as HeartSolidIcon,
+  BookmarkIcon as BookmarkSolidIcon
+} from "@heroicons/react/24/solid"
 
 type BookRow = {
   id: string
@@ -16,13 +27,28 @@ type BookRow = {
   author: string | null
   description: string | null
   file_url: string
-  created_at?: string | null
-  genres: { name: string } | null
+  upload_at: string
+  file_size_bytes: number | null
+  download_count: number
+  is_public: boolean
+  genres: { name: string; color_code?: string } | null
 }
 
-type Genre = { id: string; name: string }
+type Genre = { id: string; name: string; color_code?: string }
 
 const PAGE_SIZE = 12
+
+// Utility functions
+const formatFileSize = (bytes: number | null) => {
+  if (!bytes) return "Unknown"
+  const mb = bytes / (1024 * 1024)
+  return `${mb.toFixed(1)} MB`
+}
+
+const formatWhen = (iso: string) => {
+  const d = new Date(iso)
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+}
 
 export default function LibraryPage() {
   const [books, setBooks] = useState<BookRow[]>([])
@@ -30,19 +56,37 @@ export default function LibraryPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
 
-  // filters
+  // filters & state
   const [search, setSearch] = useState("")
-  const [sort, setSort] = useState<"newest" | "oldest" | "az">("newest")
+  const [sort, setSort] = useState<"newest" | "oldest" | "az" | "popular">("newest")
   const [genres, setGenres] = useState<Genre[]>([])
   const [genreId, setGenreId] = useState<string>("")
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [showFilters, setShowFilters] = useState(false)
+  const [favorites, setFavorites] = useState<Set<string>>(new Set())
+  const [bookmarks, setBookmarks] = useState<Set<string>>(new Set())
+  const [selectedBook, setSelectedBook] = useState<BookRow | null>(null)
 
   // load genres once
   useEffect(() => {
     const fetchGenres = async () => {
-      const { data, error } = await supabase.from("genres").select("*").order("name")
+      const { data, error } = await supabase
+        .from("genres")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order")
       if (!error && data) setGenres(data as Genre[])
     }
     fetchGenres()
+
+    // Load user preferences from localStorage
+    const savedFavorites = localStorage.getItem('library-favorites')
+    const savedBookmarks = localStorage.getItem('library-bookmarks')
+    const savedViewMode = localStorage.getItem('library-view-mode')
+
+    if (savedFavorites) setFavorites(new Set(JSON.parse(savedFavorites)))
+    if (savedBookmarks) setBookmarks(new Set(JSON.parse(savedBookmarks)))
+    if (savedViewMode) setViewMode(savedViewMode as "grid" | "list")
   }, [])
 
   // fetch first page whenever filters change
@@ -50,6 +94,19 @@ export default function LibraryPage() {
     fetchBooks(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, sort, genreId])
+
+  // Save preferences to localStorage
+  useEffect(() => {
+    localStorage.setItem('library-favorites', JSON.stringify(Array.from(favorites)))
+  }, [favorites])
+
+  useEffect(() => {
+    localStorage.setItem('library-bookmarks', JSON.stringify(Array.from(bookmarks)))
+  }, [bookmarks])
+
+  useEffect(() => {
+    localStorage.setItem('library-view-mode', viewMode)
+  }, [viewMode])
 
   // build query and fetch
   async function fetchBooks(reset = false) {
@@ -64,19 +121,28 @@ export default function LibraryPage() {
     try {
       let query = supabase
         .from("books")
-        .select("*, genres(name)", { count: "exact" })
+        .select("*, genres(name, color_code)", { count: "exact" })
         .eq("status", "approved")
+        .eq("is_public", true)
 
       if (genreId) query = query.eq("genre_id", genreId)
       if (search.trim()) {
         const term = search.trim()
-        // search in title or author (case-insensitive)
-        query = query.or(`title.ilike.%${term}%,author.ilike.%${term}%`)
+        query = query.or(`title.ilike.%${term}%,author.ilike.%${term}%,description.ilike.%${term}%`)
       }
 
-      if (sort === "newest") query = query.order("created_at", { ascending: false })
-      if (sort === "oldest") query = query.order("created_at", { ascending: true })
-      if (sort === "az") query = query.order("title", { ascending: true })
+      // Apply sorting
+      switch (sort) {
+        case "newest":
+          query = query.order("upload_at", { ascending: false })
+          break
+        case "oldest":
+          query = query.order("upload_at", { ascending: true })
+          break
+        case "az":
+          query = query.order("title", { ascending: true })
+          break
+      }
 
       // pagination range
       const from = reset ? 0 : books.length
@@ -106,32 +172,58 @@ export default function LibraryPage() {
   // UI helpers
   const formattedCount = useMemo(() => books.length, [books])
 
-  const badgeClasses = (name?: string) => {
-    const n = (name || "").toLowerCase()
-    if (n.includes("science") || n.includes("විද්")) return "bg-green-100 text-green-700"
-    if (n.includes("history") || n.includes("ඉතිහා")) return "bg-amber-100 text-amber-700"
-    if (n.includes("novel") || n.includes("නවකතා")) return "bg-indigo-100 text-indigo-700"
-    if (n.includes("short") || n.includes("කෙටි")) return "bg-pink-100 text-pink-700"
-    if (n.includes("econom") || n.includes("ආර්ථ")) return "bg-purple-100 text-purple-700"
-    if (n.includes("politic") || n.includes("දේශපාලන")) return "bg-red-100 text-red-700"
-    if (n.includes("tech") || n.includes("තොරතුරු") || n.includes("it")) return "bg-sky-100 text-sky-700"
-    return "bg-gray-100 text-gray-700"
+  const toggleFavorite = (bookId: string) => {
+    setFavorites(prev => {
+      const newFavorites = new Set(prev)
+      if (newFavorites.has(bookId)) {
+        newFavorites.delete(bookId)
+      } else {
+        newFavorites.add(bookId)
+      }
+      return newFavorites
+    })
   }
 
-  const formatWhen = (iso?: string | null) => {
-    if (!iso) return ""
-    const d = new Date(iso)
-    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+  const toggleBookmark = (bookId: string) => {
+    setBookmarks(prev => {
+      const newBookmarks = new Set(prev)
+      if (newBookmarks.has(bookId)) {
+        newBookmarks.delete(bookId)
+      } else {
+        newBookmarks.add(bookId)
+      }
+      return newBookmarks
+    })
   }
 
-  const onCopy = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url)
-      alert("Link copied to clipboard")
-    } catch {
-      alert("Could not copy link")
+  const shareBook = async (book: BookRow) => {
+    const shareData = {
+      title: book.title,
+      text: `Check out "${book.title}" by ${book.author} on Pothpath`,
+      url: window.location.href
+    }
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData)
+      } catch (err) {
+        console.log('Error sharing:', err)
+      }
+    } else {
+      await navigator.clipboard.writeText(book.file_url)
+      alert("Book link copied to clipboard!")
     }
   }
+
+  const clearFilters = () => {
+    setSearch("")
+    setGenreId("")
+    setSort("newest")
+  }
+
+  const filteredBooks = useMemo(() => {
+    return books
+  }, [books])
 
   return (
     <div className="min-h-[calc(100vh-120px)]">
@@ -140,14 +232,34 @@ export default function LibraryPage() {
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6"
+          className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 mb-8"
         >
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">📚 Pothpath Library</h1>
-            <p className="text-sm">Explore approved books. Use search and filters to find what you want.</p>
+          <div className="flex-1">
+            <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text">
+              📚 Pothpath Library
+            </h1>
+            <p className="text-lg text-muted-foreground mt-2">
+              Discover and explore approved books from our community
+            </p>
           </div>
-          <div className="text-sm">
-            Showing <span className="font-medium">{formattedCount}</span> result{formattedCount === 1 ? "" : "s"}
+          <div className="flex items-center gap-4">
+            <div className="text-sm backdrop-blur-sm px-4 py-2 rounded-full border shadow-sm">
+              <span className="font-semibold">{formattedCount}</span> book{formattedCount === 1 ? "" : "s"} available
+            </div>
+            <div className="flex gap-1 backdrop-blur-sm p-1 rounded-lg border shadow-sm">
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`p-2 rounded-md transition-colors ${viewMode === "grid" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Squares2X2Icon className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`p-2 rounded-md transition-colors ${viewMode === "list" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <ListBulletIcon className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </motion.div>
 
@@ -155,26 +267,26 @@ export default function LibraryPage() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8"
+          className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-8"
         >
           {/* Search */}
-          <div className="relative">
-            <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2" />
+          <div className="lg:col-span-2 relative">
+            <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search title or author..."
-              className="w-full pl-10 pr-3 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Search by title, author, or description..."
+              className="w-full pl-10 pr-3 py-3 border rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent backdrop-blur-sm bg-background"
             />
           </div>
 
           {/* Genre Filter */}
           <div className="relative">
-            <FunnelIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2" />
+            <FunnelIcon className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <select
               value={genreId}
               onChange={(e) => setGenreId(e.target.value)}
-              className="w-full pl-10 pr-3 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full pl-10 pr-3 py-3 border rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent backdrop-blur-sm bg-background"
             >
               <option value="">All Genres</option>
               {genres.map((g) => (
@@ -185,130 +297,490 @@ export default function LibraryPage() {
             </select>
           </div>
 
-          {/* Sort */}
-          <div>
+          {/* Sort & Filter Toggle */}
+          <div className="flex gap-2">
             <select
               value={sort}
-              onChange={(e) => setSort(e.target.value as "newest" | "oldest" | "az")}
-              className="w-full px-3 py-2.5 border rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              onChange={(e) => setSort(e.target.value as any)}
+              className="flex-1 px-3 py-3 border rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent backdrop-blur-sm bg-background"
             >
-              <option value="newest">Sort: Newest first</option>
-              <option value="oldest">Sort: Oldest first</option>
-              <option value="az">Sort: A → Z (Title)</option>
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="az">A → Z (Title)</option>
+              <option value="popular">Most Popular</option>
             </select>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="px-4 py-3 border rounded-xl shadow-sm transition-colors backdrop-blur-sm bg-background hover:bg-accent"
+            >
+              <AdjustmentsHorizontalIcon className="w-5 h-5" />
+            </button>
           </div>
         </motion.div>
 
-        {/* Grid */}
+        {/* Active Filters */}
+        {(search || genreId) && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="flex flex-wrap items-center gap-2 mb-6"
+          >
+            <span className="text-sm text-muted-foreground">Active filters:</span>
+            {search && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm bg-accent">
+                Search: "{search}"
+                <button onClick={() => setSearch("")} className="hover:bg-accent/50 rounded-full p-0.5">
+                  <XMarkIcon className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {genreId && (
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm bg-accent">
+                Genre: {genres.find(g => g.id === genreId)?.name}
+                <button onClick={() => setGenreId("")} className="hover:bg-accent/50 rounded-full p-0.5">
+                  <XMarkIcon className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            <button
+              onClick={clearFilters}
+              className="text-sm underline text-muted-foreground hover:text-foreground"
+            >
+              Clear all
+            </button>
+          </motion.div>
+        )}
+
+        {/* Grid/List View */}
         {loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-40 rounded-xl border shadow-sm p-4">
-                <div className="h-5 w-1/2 rounded animate-pulse mb-3" />
-                <div className="h-4 w-1/3 rounded animate-pulse mb-2" />
-                <div className="h-3 w-3/4 rounded animate-pulse mb-1.5" />
-                <div className="h-3 w-2/3 rounded animate-pulse" />
-              </div>
+          <div className={viewMode === "grid"
+            ? "grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+            : "space-y-4"
+          }>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <BookCardSkeleton key={i} viewMode={viewMode} />
             ))}
           </div>
-        ) : books.length === 0 ? (
-          <EmptyState />
+        ) : filteredBooks.length === 0 ? (
+          <EmptyState onClearFilters={clearFilters} hasFilters={!!(search || genreId)} />
         ) : (
           <>
-            <motion.ul
-              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-              initial="hidden"
-              animate="visible"
-              variants={{
-                hidden: {},
-                visible: { transition: { staggerChildren: 0.05 } },
-              }}
-            >
-              {books.map((book) => (
-                <motion.li
-                  key={book.id}
-                  className="group border rounded-xl shadow-sm hover:shadow-md transition overflow-hidden"
-                  variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
-                >
-                  <div className="p-5">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className={`text-xs px-2 py-1 rounded-full ${badgeClasses(book.genres?.name)}`}>
-                        {book.genres?.name || "Uncategorized"}
-                      </span>
-                      {book.created_at && (
-                        <span className="text-xs ml-auto">{formatWhen(book.created_at)}</span>
-                      )}
-                    </div>
-
-                    <h2 className="text-lg font-semibold leading-snug line-clamp-2">{book.title}</h2>
-                    {book.author && <p className="text-sm mt-1">{book.author}</p>}
-
-                    {book.description && (
-                      <p className="text-sm mt-3 line-clamp-3">{book.description}</p>
-                    )}
-
-                    <div className="mt-4 flex items-center gap-2">
-                      <a
-                        href={book.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-md bg-primary-foreground hover:bg-primary"
-                      >
-                        <DocumentTextIcon className="w-5 h-5" />
-                        View PDF
-                      </a>
-
-                      <a
-                        href={book.file_url}
-                        download
-                        className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-md border"
-                      >
-                        <ArrowDownTrayIcon className="w-5 h-5" />
-                        Download
-                      </a>
-
-                      <button
-                        onClick={() => onCopy(book.file_url)}
-                        className="ml-auto text-xs text-blue-500 hover:text-blue-700"
-                      >
-                        Copy link
-                      </button>
-                    </div>
-                  </div>
-                </motion.li>
-              ))}
-            </motion.ul>
+            <AnimatePresence>
+              <motion.div
+                className={viewMode === "grid"
+                  ? "grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                  : "space-y-4"
+                }
+                initial="hidden"
+                animate="visible"
+                variants={{
+                  hidden: {},
+                  visible: { transition: { staggerChildren: 0.05 } },
+                }}
+              >
+                {filteredBooks.map((book) => (
+                  <BookCard
+                    key={book.id}
+                    book={book}
+                    viewMode={viewMode}
+                    isFavorite={favorites.has(book.id)}
+                    isBookmarked={bookmarks.has(book.id)}
+                    onToggleFavorite={() => toggleFavorite(book.id)}
+                    onToggleBookmark={() => toggleBookmark(book.id)}
+                    onShare={() => shareBook(book)}
+                    onViewDetails={() => setSelectedBook(book)}
+                  />
+                ))}
+              </motion.div>
+            </AnimatePresence>
 
             {hasMore && (
-              <div className="flex justify-center mt-8">
-                <button
+              <div className="flex justify-center mt-12">
+                <motion.button
                   onClick={() => fetchBooks(false)}
                   disabled={loadingMore}
-                  className="px-4 py-2 rounded-md border shadow-sm"
+                  className="px-8 py-3 border-2 rounded-xl shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-background hover:bg-accent"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
-                  {loadingMore ? "Loading..." : "Load more"}
-                </button>
+                  {loadingMore ? (
+                    <span className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin border-primary" />
+                      Loading...
+                    </span>
+                  ) : (
+                    "Load More Books"
+                  )}
+                </motion.button>
               </div>
             )}
           </>
         )}
       </div>
+
+      {/* Book Detail Modal */}
+      <AnimatePresence>
+        {selectedBook && (
+          <BookDetailModal
+            book={selectedBook}
+            isFavorite={favorites.has(selectedBook.id)}
+            isBookmarked={bookmarks.has(selectedBook.id)}
+            onClose={() => setSelectedBook(null)}
+            onToggleFavorite={() => toggleFavorite(selectedBook.id)}
+            onToggleBookmark={() => toggleBookmark(selectedBook.id)}
+            onShare={() => shareBook(selectedBook)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
 
-function EmptyState() {
+function BookCard({
+  book,
+  viewMode,
+  isFavorite,
+  isBookmarked,
+  onToggleFavorite,
+  onToggleBookmark,
+  onShare,
+  onViewDetails
+}: {
+  book: BookRow
+  viewMode: "grid" | "list"
+  isFavorite: boolean
+  isBookmarked: boolean
+  onToggleFavorite: () => void
+  onToggleBookmark: () => void
+  onShare: () => void
+  onViewDetails: () => void
+}) {
+  if (viewMode === "list") {
+    return (
+      <motion.div
+        className="rounded-xl border shadow-sm hover:shadow-md transition-all p-6 group bg-card"
+        variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+        whileHover={{ scale: 1.01 }}
+      >
+        <div className="flex gap-4">
+          <div className="flex-shrink-0 w-16 h-20 rounded-lg flex items-center justify-center bg-muted">
+            <DocumentTextIcon className="w-8 h-8 text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <h3 className="font-semibold text-lg leading-tight line-clamp-2 transition-colors group-hover:text-primary">
+                  {book.title}
+                </h3>
+                {book.author && (
+                  <p className="mt-1 text-muted-foreground">by {book.author}</p>
+                )}
+              </div>
+            </div>
+
+            {book.description && (
+              <p className="text-muted-foreground text-sm line-clamp-2 mb-3">
+                {book.description}
+              </p>
+            )}
+
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-accent`}>
+                {book.genres?.name || "Uncategorized"}
+              </span>
+              <span>{formatWhen(book.upload_at)}</span>
+              <span>{formatFileSize(book.file_size_bytes)}</span>
+            </div>
+
+            <div className="flex items-center gap-3 mt-4">
+              <a
+                href={book.file_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 transition-colors text-primary hover:bg-primary/10 rounded-lg"
+              >
+                <DocumentTextIcon className="w-4 h-4" />
+                Read
+              </a>
+              <a
+                href={book.file_url}
+                download
+                className="inline-flex items-center gap-2 px-4 py-2 border transition-colors hover:bg-accent rounded-lg"
+              >
+                <ArrowDownTrayIcon className="w-4 h-4" />
+                Download
+              </a>
+              <button
+                onClick={onViewDetails}
+                className="ml-auto text-sm transition-colors text-muted-foreground hover:text-foreground"
+              >
+                Details
+              </button>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    )
+  }
+
+  // Grid View
+  return (
+    <motion.div
+      className="rounded-xl border shadow-sm hover:shadow-xl transition-all p-5 group bg-card"
+      variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}
+      whileHover={{ scale: 1.02, y: -2 }}
+    >
+      {/* Header with genre and actions */}
+      <div className="flex items-center justify-between mb-3">
+        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-accent`}>
+          {book.genres?.name || "Uncategorized"}
+        </span>
+      </div>
+
+      {/* Book icon */}
+      <div className="w-12 h-16 rounded-lg flex items-center justify-center mb-4 mx-auto bg-muted">
+        <DocumentTextIcon className="w-6 h-6 text-primary" />
+      </div>
+
+      {/* Content */}
+      <h3 className="font-semibold text-lg leading-tight line-clamp-2 mb-2 transition-colors group-hover:text-primary">
+        {book.title}
+      </h3>
+
+      {book.author && (
+        <p className="text-sm mb-3 text-muted-foreground">by {book.author}</p>
+      )}
+
+      {/* Metadata */}
+      <div className="flex justify-between text-xs mb-4 text-muted-foreground">
+        <span>{formatWhen(book.upload_at)}</span>
+        <span>{formatFileSize(book.file_size_bytes)}</span>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2">
+        <a
+          href={book.file_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors text-primary hover:bg-primary/10"
+        >
+          <DocumentTextIcon className="w-4 h-4" />
+          Read
+        </a>
+        <a
+          href={book.file_url}
+          download
+          className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 border text-sm rounded-lg transition-colors hover:bg-accent"
+        >
+          <ArrowDownTrayIcon className="w-4 h-4" />
+          Save
+        </a>
+      </div>
+
+      {/* Footer actions */}
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+        <button
+          onClick={onShare}
+          className="text-xs transition-colors flex items-center gap-1 text-muted-foreground hover:text-foreground"
+        >
+          <ShareIcon className="w-3 h-3" />
+          Share
+        </button>
+        <button
+          onClick={onViewDetails}
+          className="text-xs transition-colors text-muted-foreground hover:text-foreground"
+        >
+          Details
+        </button>
+      </div>
+    </motion.div>
+  )
+}
+
+function BookCardSkeleton({ viewMode }: { viewMode: "grid" | "list" }) {
+  if (viewMode === "list") {
+    return (
+      <div className="rounded-xl border shadow-sm p-6 bg-card">
+        <div className="flex gap-4">
+          <div className="flex-shrink-0 w-16 h-20 rounded-lg animate-pulse bg-muted" />
+          <div className="flex-1 space-y-3">
+            <div className="h-6 rounded animate-pulse w-3/4 bg-muted" />
+            <div className="h-4 rounded animate-pulse w-1/2 bg-muted" />
+            <div className="h-4 rounded animate-pulse w-full bg-muted" />
+            <div className="h-4 rounded animate-pulse w-2/3 bg-muted" />
+            <div className="flex gap-4">
+              <div className="h-8 rounded animate-pulse w-24 bg-muted" />
+              <div className="h-8 rounded animate-pulse w-24 bg-muted" />
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border shadow-sm p-5 space-y-3 bg-card">
+      <div className="h-4 rounded animate-pulse w-1/3 bg-muted" />
+      <div className="w-12 h-16 rounded-lg animate-pulse mx-auto bg-muted" />
+      <div className="h-6 rounded animate-pulse bg-muted" />
+      <div className="h-4 rounded animate-pulse w-2/3 mx-auto bg-muted" />
+      <div className="h-12 rounded animate-pulse bg-muted" />
+      <div className="h-3 rounded animate-pulse w-full bg-muted" />
+    </div>
+  )
+}
+
+function EmptyState({ onClearFilters, hasFilters }: { onClearFilters: () => void; hasFilters: boolean }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="text-center py-16 rounded-2xl border shadow-sm"
+      className="text-center py-20 rounded-2xl border-2 border-dashed border-border bg-card"
     >
-      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full mb-3">
-        <DocumentTextIcon className="w-6 h-6" />
+      <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-4">
+        <DocumentTextIcon className="w-10 h-10 text-muted-foreground" />
       </div>
-      <h3 className="text-lg font-semibold">No books found</h3>
-      <p className="text-sm mt-1">Try adjusting your search or filters</p>
+      <h3 className="text-2xl font-semibold mb-2">No books found</h3>
+      <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+        {hasFilters
+          ? "Try adjusting your search criteria or filters to find more books."
+          : "The library is currently empty. Check back later for new additions!"
+        }
+      </p>
+      {hasFilters && (
+        <button
+          onClick={onClearFilters}
+          className="px-6 py-3 transition-colors bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg"
+        >
+          Clear Filters
+        </button>
+      )}
+    </motion.div>
+  )
+}
+
+function BookDetailModal({
+  book,
+  isFavorite,
+  isBookmarked,
+  onClose,
+  onToggleFavorite,
+  onToggleBookmark,
+  onShare
+}: {
+  book: BookRow
+  isFavorite: boolean
+  isBookmarked: boolean
+  onClose: () => void
+  onToggleFavorite: () => void
+  onToggleBookmark: () => void
+  onShare: () => void
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 flex items-center justify-center p-4 z-50 bg-background/80 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="bg-card rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-accent`}>
+                {book.genres?.name || "Uncategorized"}
+              </span>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-accent transition-colors"
+            >
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="text-center mb-6">
+            <div className="w-20 h-28 rounded-xl flex items-center justify-center mx-auto mb-4 bg-muted">
+              <DocumentTextIcon className="w-10 h-10 text-muted-foreground" />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">{book.title}</h2>
+            {book.author && <p className="text-lg text-muted-foreground">by {book.author}</p>}
+          </div>
+
+          {book.description && (
+            <div className="mb-6">
+              <h3 className="font-semibold mb-2">Description</h3>
+              <p className="leading-relaxed text-muted-foreground">{book.description}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="text-center p-4 rounded-lg bg-accent">
+              <div className="text-2xl font-bold">{formatFileSize(book.file_size_bytes)}</div>
+              <div className="text-sm text-muted-foreground">File Size</div>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <a
+              href={book.file_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 transition-colors font-semibold bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg"
+            >
+              <DocumentTextIcon className="w-5 h-5" />
+              Read Online
+            </a>
+            <a
+              href={book.file_url}
+              download
+              className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 border rounded-lg transition-colors font-semibold hover:bg-accent"
+            >
+              <ArrowDownTrayIcon className="w-5 h-5" />
+              Download
+            </a>
+            <button
+              onClick={onShare}
+              className="px-4 py-3 border rounded-lg transition-colors hover:bg-accent"
+            >
+              <ShareIcon className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t border-border">
+            <button
+              onClick={onToggleFavorite}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent transition-colors"
+            >
+              {isFavorite ? (
+                <HeartSolidIcon className="w-5 h-5 text-red-500" />
+              ) : (
+                <HeartIcon className="w-5 h-5" />
+              )}
+              <span>{isFavorite ? "Favorited" : "Add to Favorites"}</span>
+            </button>
+            <button
+              onClick={onToggleBookmark}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-accent transition-colors"
+            >
+              {isBookmarked ? (
+                <BookmarkSolidIcon className="w-5 h-5 text-primary" />
+              ) : (
+                <BookmarkIcon className="w-5 h-5" />
+              )}
+              <span>{isBookmarked ? "Bookmarked" : "Add to Bookmarks"}</span>
+            </button>
+          </div>
+        </div>
+      </motion.div>
     </motion.div>
   )
 }
