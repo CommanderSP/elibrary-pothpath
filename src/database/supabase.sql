@@ -8,7 +8,6 @@ CREATE TABLE public.books (
   file_size_bytes bigint CHECK (file_size_bytes > 0 OR file_size_bytes IS NULL),
   status character varying DEFAULT 'approved'::character varying CHECK (status::text = ANY (ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying, 'archived'::character varying]::text[])),
   is_public boolean DEFAULT true,
-  download_count integer DEFAULT 0 CHECK (download_count >= 0),
   upload_at timestamp without time zone DEFAULT now(),
   published_at timestamp without time zone,
   upload_by uuid,
