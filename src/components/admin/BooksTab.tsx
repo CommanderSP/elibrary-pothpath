@@ -410,10 +410,6 @@ export function BooksTab() {
                         </Select>
 
                         <div className="flex gap-2">
-                            <Button onClick={fetchBooks} variant="outline" className="flex items-center gap-2 flex-1">
-                                <RefreshCw className="w-4 h-4" />
-                                Refresh
-                            </Button>
                             <Button
                                 variant="outline"
                                 size="icon"

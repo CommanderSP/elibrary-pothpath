@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import {
     RefreshCw,
     CheckCircle,
@@ -18,8 +17,6 @@ import {
     PieChart,
     Pie,
     Cell,
-    LineChart,
-    Line,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -29,6 +26,7 @@ import {
     AreaChart,
     Area
 } from 'recharts'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 type AnalyticsBook = {
     id: string
@@ -40,8 +38,22 @@ type AnalyticsBook = {
     is_public: boolean
 }
 
+type DailyData = {
+    date: string
+    approved: number
+    pending: number
+    total: number
+}
+
 type MonthlyData = {
     month: string
+    approved: number
+    pending: number
+    total: number
+}
+
+type YearlyData = {
+    year: string
     approved: number
     pending: number
     total: number
@@ -58,6 +70,7 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
 export function AnalyticsTab() {
     const [books, setBooks] = useState<AnalyticsBook[]>([])
     const [loading, setLoading] = useState(true)
+    const [timeRange, setTimeRange] = useState("daily")
 
     useEffect(() => {
         const fetchData = async () => {
@@ -97,6 +110,41 @@ export function AnalyticsTab() {
         return genreMap
     }, [books])
 
+    // Daily upload data
+    const dailyData = useMemo(() => {
+        const daily: Record<string, DailyData> = {}
+
+        books.forEach(book => {
+            const date = new Date(book.upload_at)
+            const dateKey = date.toISOString().split('T')[0] // YYYY-MM-DD
+            const dateName = date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
+            })
+
+            if (!daily[dateKey]) {
+                daily[dateKey] = {
+                    date: dateName,
+                    approved: 0,
+                    pending: 0,
+                    total: 0
+                }
+            }
+
+            daily[dateKey].total++
+            if (book.status === 'approved') {
+                daily[dateKey].approved++
+            } else if (book.status === 'pending') {
+                daily[dateKey].pending++
+            }
+        })
+
+        // Sort by date and limit to last 30 days for better readability
+        return Object.values(daily)
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .slice(-30) // Last 30 days
+    }, [books])
+
     // Monthly upload data
     const monthlyData = useMemo(() => {
         const monthly: Record<string, MonthlyData> = {}
@@ -125,6 +173,87 @@ export function AnalyticsTab() {
 
         return Object.values(monthly).sort((a, b) => a.month.localeCompare(b.month))
     }, [books])
+
+    // Yearly upload data
+    const yearlyData = useMemo(() => {
+        const yearly: Record<string, YearlyData> = {}
+
+        books.forEach(book => {
+            const date = new Date(book.upload_at)
+            const yearKey = date.getFullYear().toString()
+            const yearName = date.getFullYear().toString()
+
+            if (!yearly[yearKey]) {
+                yearly[yearKey] = {
+                    year: yearName,
+                    approved: 0,
+                    pending: 0,
+                    total: 0
+                }
+            }
+
+            yearly[yearKey].total++
+            if (book.status === 'approved') {
+                yearly[yearKey].approved++
+            } else if (book.status === 'pending') {
+                yearly[yearKey].pending++
+            }
+        })
+
+        return Object.values(yearly).sort((a, b) => a.year.localeCompare(b.year))
+    }, [books])
+
+    // Get current trend data based on selected time range
+    const getTrendData = () => {
+        switch (timeRange) {
+            case "daily":
+                return dailyData
+            case "monthly":
+                return monthlyData
+            case "yearly":
+                return yearlyData
+            default:
+                return dailyData
+        }
+    }
+
+    const getChartDescription = () => {
+        switch (timeRange) {
+            case "daily":
+                return "Book uploads by day (last 30 days)"
+            case "monthly":
+                return "Book uploads by month"
+            case "yearly":
+                return "Book uploads by year"
+            default:
+                return "Book uploads over time"
+        }
+    }
+
+    const getXAxisProps = () => {
+        switch (timeRange) {
+            case "daily":
+                return {
+                    dataKey: "date",
+                    angle: -45,
+                    textAnchor: "end" as const,
+                    height: 80,
+                    interval: "preserveStartEnd" as const
+                }
+            case "monthly":
+                return {
+                    dataKey: "month"
+                }
+            case "yearly":
+                return {
+                    dataKey: "year"
+                }
+            default:
+                return {
+                    dataKey: "date"
+                }
+        }
+    }
 
     // Status data for pie chart
     const statusData = useMemo((): StatusData[] => [
@@ -204,27 +333,64 @@ export function AnalyticsTab() {
 
             {/* Charts Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Monthly Upload Trend */}
+                {/* Upload Trend with Tabs */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Monthly Upload Trend</CardTitle>
+                        <CardTitle>Upload Trend</CardTitle>
                         <CardDescription>
-                            Book uploads over time
+                            {getChartDescription()}
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <AreaChart data={monthlyData}>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="month" />
-                                <YAxis />
-                                <Tooltip />
-                                <Legend />
-                                <Area type="monotone" dataKey="total" stackId="1" stroke="#8884d8" fill="#8884d8" name="Total Books" />
-                                <Area type="monotone" dataKey="approved" stackId="2" stroke="#82ca9d" fill="#82ca9d" name="Approved" />
-                                <Area type="monotone" dataKey="pending" stackId="3" stroke="#ffc658" fill="#ffc658" name="Pending" />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                        <Tabs value={timeRange} onValueChange={setTimeRange} className="w-full">
+                            <TabsList className="grid w-full grid-cols-3">
+                                <TabsTrigger value="daily">Daily</TabsTrigger>
+                                <TabsTrigger value="monthly">Monthly</TabsTrigger>
+                                <TabsTrigger value="yearly">Yearly</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="daily" className="mt-4">
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <AreaChart data={getTrendData()}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis {...getXAxisProps()} />
+                                        <YAxis />
+                                        <Tooltip />
+                                        <Legend />
+                                        <Area type="monotone" dataKey="total" stackId="1" stroke="#8884d8" fill="#8884d8" name="Total Books" />
+                                        <Area type="monotone" dataKey="approved" stackId="2" stroke="#82ca9d" fill="#82ca9d" name="Approved" />
+                                        <Area type="monotone" dataKey="pending" stackId="3" stroke="#ffc658" fill="#ffc658" name="Pending" />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </TabsContent>
+                            <TabsContent value="monthly" className="mt-4">
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <AreaChart data={getTrendData()}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis {...getXAxisProps()} />
+                                        <YAxis />
+                                        <Tooltip />
+                                        <Legend />
+                                        <Area type="monotone" dataKey="total" stackId="1" stroke="#8884d8" fill="#8884d8" name="Total Books" />
+                                        <Area type="monotone" dataKey="approved" stackId="2" stroke="#82ca9d" fill="#82ca9d" name="Approved" />
+                                        <Area type="monotone" dataKey="pending" stackId="3" stroke="#ffc658" fill="#ffc658" name="Pending" />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </TabsContent>
+                            <TabsContent value="yearly" className="mt-4">
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <AreaChart data={getTrendData()}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis {...getXAxisProps()} />
+                                        <YAxis />
+                                        <Tooltip />
+                                        <Legend />
+                                        <Area type="monotone" dataKey="total" stackId="1" stroke="#8884d8" fill="#8884d8" name="Total Books" />
+                                        <Area type="monotone" dataKey="approved" stackId="2" stroke="#82ca9d" fill="#82ca9d" name="Approved" />
+                                        <Area type="monotone" dataKey="pending" stackId="3" stroke="#ffc658" fill="#ffc658" name="Pending" />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </TabsContent>
+                        </Tabs>
                     </CardContent>
                 </Card>
 

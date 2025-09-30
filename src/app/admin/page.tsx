@@ -12,6 +12,7 @@ import {
   BookOpen,
   BarChart3,
   Tag,
+  RefreshCw,
 } from "lucide-react"
 import { BooksTab } from "@/components/admin/BooksTab"
 import { GenresTab } from "@/components/admin/GenresTab"
@@ -24,6 +25,7 @@ export default function AdminPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [accessDenied, setAccessDenied] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   // Check if user is admin and has allowed email
   useEffect(() => {
@@ -51,6 +53,12 @@ export default function AdminPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push("/")
+  }
+
+  const handleRefresh = () => {
+    setRefreshing(true)
+    // Reload the page to refresh all data
+    window.location.reload()
   }
 
   if (loading) {
@@ -101,7 +109,20 @@ export default function AdminPage() {
             <div className="text-sm text-muted-foreground">
               Logged in as: {user?.email}
             </div>
-            <Button variant="outline" onClick={handleLogout} className="flex items-center gap-2 sm:w-auto w-full">
+            <Button
+              variant="outline"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleLogout}
+              className="flex items-center gap-2"
+            >
               <LogOut className="w-4 h-4" />
               Logout
             </Button>
