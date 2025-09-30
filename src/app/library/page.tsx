@@ -6,13 +6,9 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   MagnifyingGlassIcon,
   FunnelIcon,
-  AdjustmentsHorizontalIcon,
   Squares2X2Icon,
   ListBulletIcon,
   XMarkIcon,
-  DocumentTextIcon,
-  ArrowDownTrayIcon,
-  ShareIcon,
 } from "@heroicons/react/24/outline"
 import { BookCard } from "@/components/library/BookCard"
 import { BookCardSkeleton } from "@/components/library/BookCardSkeleton"
@@ -303,12 +299,6 @@ export default function LibraryPage() {
               <option value="az">A → Z (Title)</option>
               <option value="popular">Most Popular</option>
             </select>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="px-4 py-3 border rounded-xl shadow-sm transition-colors backdrop-blur-sm bg-background hover:bg-accent"
-            >
-              <AdjustmentsHorizontalIcon className="w-5 h-5" />
-            </button>
           </div>
         </motion.div>
 

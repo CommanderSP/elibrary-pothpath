@@ -158,13 +158,19 @@ export default function UploadPage() {
     }
 
     setUploading(true)
+    await new Promise(resolve => setTimeout(resolve, 3000))
     setUploadProgress(0)
+
+    // add 3s delay and then setUploadProgress(10)
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    setUploadProgress(10)
+
 
     try {
       // 1) Upload file to Storage with progress
       const safeTitle = title.trim().replace(/[^a-zA-Z0-9]/g, "_").slice(0, 60)
       const filePath = `${user.id}/${Date.now()}_${safeTitle}.pdf`
-
+      setUploadProgress(30)
       const { error: storageError } = await supabase.storage
         .from("books")
         .upload(filePath, file!, {
@@ -172,7 +178,13 @@ export default function UploadPage() {
           cacheControl: '3600'
         })
 
-      setUploadProgress(90)
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      setUploadProgress(50)
+
+      await new Promise(resolve => setTimeout(resolve, 3000))
+      setUploadProgress(70)
+
+      setUploadProgress(80)
 
       if (storageError) {
         if (storageError.message.includes("Bucket not found")) {
@@ -181,7 +193,7 @@ export default function UploadPage() {
         throw storageError
       }
 
-      setUploadProgress(100)
+      setUploadProgress(90)
 
       // 2) Get public URL
       const { data: urlData } = supabase.storage
@@ -204,6 +216,8 @@ export default function UploadPage() {
       }])
 
       if (dbError) throw dbError
+
+      setUploadProgress(100)
 
       setCurrentStep("complete")
       toast.success("Book uploaded successfully! It's now pending approval.")
